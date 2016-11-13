@@ -1,0 +1,46 @@
+#!/bin/sh
+# 
+# Script: sync_s3_from_git
+# Author: Louis Rawlins (email@louisrawlins.com)
+# Date: November 13, 2016 at 9:26:32 AM PST
+# Description: Syncs AWS S3 with a clean Git working tree using s3cmd
+# Requires: s3cmd, Git
+#
+# Usage:
+#   Set up and test s3cmd to work with AWS S3 bucket
+#   http://s3tools.org/s3cmd-howto
+#
+#   Create .s3cmd file with the AWS S3 bucket name in Git repository 
+#   % echo 's3_bucket_name' > .s3cmd
+#   % ls -a
+#   .git     .s3cmd    file1    file2    file3
+#
+#   Can be used "post-push" with Git to sync working tree with AWS S3
+#   % git push origin master && sync_s3_from_git
+#
+# Resources:
+#   http://gitready.com/intermediate/2009/01/29/exporting-your-repository.html
+#   http://s3tools.org/s3cmd-sync
+#
+# Inspiration:
+#   http://kramerc.com/2013/10/23/deploying-to-s3-upon-git-push/
+# 
+
+# Echo all commands and output for debugging
+# set -x
+
+# Set AWS S3 bucket name from .s3cmd in Git repository to sync
+S3_BUCKET_NAME="$(<.s3cmd)"
+TEMP="$(mktemp -t -d)"
+
+function clean_up {
+    rm -rf "$TEMP"
+    exit
+}
+
+# Ensure temporary directory and files are removed when or if script ends
+trap clean_up SIGHUP SIGINT SIGTERM
+
+# Checkout "clean" tree from Git, then sync with AWS S3
+git checkout-index --prefix="$TEMP"/ -af
+s3cmd sync --verbose --delete-removed --acl-public --exclude '.git/*' "$TEMP"/ s3://"$S3_BUCKET_NAME"
